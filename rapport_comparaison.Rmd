@@ -1,0 +1,859 @@
+---
+title: "Script R"
+author : Léa Beaulieu
+date: "`r format(Sys.time(), '%d, %B, %Y')`"
+output: 
+  html_document:
+    code_folding : hide
+    css : bioconductor.css
+    highlight : pygments
+    number_sections : yes
+    toc : yes
+    toc_depth : 6
+    toc_float :
+      collapsed : true
+      scroll_smooth : false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages installation
+
+Run to install all packages we need in this script.
+
+```{r eval = FALSE}
+install.packages("tidyverse")
+install.packages("esquisse")
+install.packages("ggplot2")
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+if (!require("devtools")) install.packages("devtools")
+devtools::install_github("talgalili/d3heatmap")
+
+BiocManager::install("phyloseq")
+remotes::install_github("mahendra-mariadassou/phyloseq-extended", ref = "dev")
+remotes::install_github("adrientaudiere/MiscMetabar")
+install.packages("remotes")
+remotes::install_github("gauravsk/ranacapa")
+BiocManager::install('mixOmics')
+devtools::install_github("ricardo-bion/ggradar")
+#install.packages("devtools")
+#devtools::install_git("https://forgemia.inra.fr/umrf/exploremetabar/-/tree/master/")
+
+install.packages("RColorBrewer")
+install.packages("viridis")
+install.packages("factoextra")
+install.packages("FactoMineR")
+install.packages("clusterSim")
+install.packages("umap")
+install.packages("pheatmap")
+install.packages("paletteer")
+install.packages("heatmaply")
+install.packages("htmlwidgets")
+install.packages("ggpubr")
+install.packages("rstatix")
+install.packages("funrar")
+```
+
+# Packages loading
+
+Run to load all packages we need in this script.
+
+```{r include=FALSE}
+library(tidyverse)
+library(esquisse)
+library(ggplot2)
+library(phyloseq)
+library(phyloseq.extended)
+library(RColorBrewer)
+library(viridis)
+library(factoextra)
+library(FactoMineR)
+library(clusterSim)
+library(umap)
+library(pheatmap)
+library(d3heatmap)
+library(paletteer)
+library(mixOmics)
+library(heatmaply)
+library(htmlwidgets)
+library(ggpubr)
+library(rstatix)
+library(funrar)
+library(ggradar)
+library(MiscMetabar)
+library(ranacapa)
+#library(ExploreMetabar)
+#ExploreMetabar::run_app()
+theme_set(theme_bw())
+```
+
+Run this code to save the plots that will be generated.
+
+```{r eval = FALSE}
+SAVE_PLOT_comparison = TRUE
+SAVE_PLOT_mixomics = TRUE
+SAVE_PLOT_correlation = TRUE
+SAVE_PLOT_abundance = TRUE
+SAVE_PLOT_heatmap = TRUE
+SAVE_PLOT_pca_phyloseq = TRUE
+SAVE_PLOT_pca_factominer = TRUE
+SAVE_PLOT_pca_prcomp = TRUE
+SAVE_PLOT_pca_sample = TRUE
+SAVE_PLOT_pca_experiment = TRUE
+SAVE_PLOT_umap = TRUE
+SAVE_PLOT_state_X = TRUE
+```
+
+# Data loading 
+
+## Setting the path of your files:
+```{r eval=FALSE}
+setwd("C:/Users/lbeaulieu/Documents/Resultats_Easy16S/Phylum")
+```
+
+## Loading files from Easy16S:
+```{r eval = FALSE}
+phylum_prop = read.table("Easy16S_phylum.csv", sep = ',', header = T)
+phylum_count = read.table("Easy16S_singleton_phylum.csv", sep = ',', header = T)
+```
+
+## Loading phyloseq object:
+```{r eval = FALSE}
+load("C:/Users/lbeaulieu/Downloads/Easy16S-data-2023-01-16.RData")
+phyloseq_obj <- data
+```
+
+## Loading meta data table:
+```{r eval = FALSE}
+sample_info <- read.table("sample_info.csv", sep = ';', header = T)
+rownames(sample_info) <- sample_info$X
+sample_info <- sample_info[1:60,]
+```
+
+## Removing irrelevant data
+
+Here lines 21 and 22 are removed because Phylums names are empty and column 63 is removed because there is not enough sequence.
+```{r eval = FALSE}
+phylum_count <- phylum_count[-c(21,22), -63]
+count <- phylum_count[,3:62]
+prop <- phylum_prop[,3:62]
+rownames(count) <- phylum_count$Phylum
+```
+
+## Transforming count into relative counts
+```{r eval = FALSE}
+relative_counts <- make_relative(as.matrix(count))
+relative_counts <- as.data.frame(relative_counts)
+relative_prop <- make_relative(as.matrix(prop))
+relative_prop <- as.data.frame(relative_prop)
+```
+
+# Phylums tables comparison
+
+Comparison between 2 different tables generated with FROGS.
+phylum_count is corresponding to the singleton option during the Filters step in FROGS.
+```{r eval = FALSE}
+f=function(x,d){
+  a=which(x["x1"]==d$x1 & x["x2"]==d$x2)
+  ifelse(length(a)==0,FALSE,TRUE)
+}
+
+same_phylum <- phylum_prop[!apply(phylum_prop,MARGIN=1,FUN=f,d=phylum_count),]
+dim(same_phylum) == dim(phylum_prop)
+# Il semblerait que tous les phylum contenus dans le fichier proportion sont retrouvés dans le fichier count.
+
+
+phylum_diff <- phylum_count[!paste(phylum_count$Phylum)%in%paste(phylum_prop$Phylum),]
+same_phylum %in% phylum_diff
+# Il y a 10 phylum qui ne sont pas retrouvés dans le fichier proportion
+
+```
+With this code, it shows that he same phylums are in both tables but 10 phylums are missing from the table without the singleton option.
+
+# Sample comparison 
+
+The first sample that will be compared in both phylum tables is VI-15 because it has the smallest amount of sequences.
+```{r eval = FALSE}
+sum_count <- apply(relative_counts, 2, sum) * 100
+sum_count <- as.data.frame(sum_count)
+slice_min(sum_count, sum_count)
+
+sum_prop<- apply(relative_prop, 2, sum) * 100
+sum_prop <- as.data.frame(sum_prop)
+slice_min(sum_prop, sum_prop)
+```
+Despite the small amount of OTU in this sample, we can see a small difference between both methods.
+
+The second sample that will be compared in both phylum tables is III-34 because it has the largest amount of sequences.
+```{r eval = FALSE}
+sum_count <- apply(count, 2, sum)
+sum_count <- as.data.frame(sum_count)
+slice_max(sum_count, sum_count)
+
+
+sum_prop<- apply(prop, 2, sum)
+sum_prop <- as.data.frame(sum_prop)
+slice_max(sum_prop, sum_prop)
+```
+Same observation.
+
+# Plots 
+
+## Phyloseq plots
+
+```{r ab_plot, eval = FALSE}
+if(SAVE_PLOT_abundance){
+  pdf(file = "plots/abundance_plots.pdf", width = 15, height = 12, title = "plot_abundance")
+}
+p1 <- plot_bar(phyloseq_obj, fill = "Phylum")
+p1
+p2 <- plot_composition(physeq = phyloseq_obj, taxaRank1 = NULL, taxaRank2 = "Phylum", numberOfTaxa = 10L, x = "Sample")
+p2 + NULL #+ scale_colour_gradient(colours=rainbow(10))
+if(SAVE_PLOT_abundance){
+  dev.off()
+}
+
+if(SAVE_PLOT_heatmap){
+  pdf(file = "plots/heatmap_phyloseq.pdf", width = 15, height = 12, title = "Heatmap phyloseq")
+}
+data_select <- prune_taxa(names(sort(taxa_sums(phyloseq_obj), decreasing = TRUE)[1:250L]), phyloseq_obj)
+p <- plot_heatmap(physeq = data_select, distance = "bray", method = "NMDS", title = "Taxa heatmap by samples", sample.order = NULL, low = "yellow", high = "red", na.value = "white")
+p + NULL
+if(SAVE_PLOT_heatmap){
+  dev.off()
+}
+
+if(SAVE_PLOT_pca_phyloseq){
+  pdf(file = "plots/pca_phyloseq.pdf", width = 15, height = 12, title = "PCA phyloseq")
+}
+data_matrix <- as.data.frame(t(otu_table(phyloseq_obj)))
+pca <- prcomp(data_matrix[colSums(data_matrix) != 0], center = TRUE, scale = TRUE)
+habillage <- "none"
+p <- fviz_pca_biplot(pca, axes = c(1, 2), geom.ind = c("point", "text", ""), geom.var = c("arrow", "text", ""), habillage = habillage, invisible = "quali", addEllipses = FALSE, title = "Principal Component Analysis", select.var = list(contrib = 50L))
+p + theme_bw()
+if(SAVE_PLOT_pca_phyloseq){
+  dev.off()
+}
+```
+
+## Dimensionality reduction
+
+### All data
+```{r eval = FALSE}
+normalized_counts <- normalize(count, type = "n1", normalization = "column")
+
+res_pca <- PCA(t(relative_counts), scale.unit = T, ncp = 3,
+               graph = T)
+get_eigenvalue(res_pca)
+
+pca1 <- cbind(sample_info[1:60,], PC1 = res_pca$ind$coord[,1], PC2 = res_pca$ind$coord[,2])
+
+
+if(SAVE_PLOT_pca_factominer){
+  pdf(file = "plots/pca_factominer.pdf", width = 15, height = 12, title = "PCA factominer")
+}
+ggplot(data = pca1, aes(x = PC1, y = PC2, color = substrate.type, shape = methanizer_state)) +
+  geom_point(alpha = 0.8) +
+  xlab(paste0("PC1: ", round(res_pca$eig[1,2]), "% variance")) +
+  ylab(paste0("PC2: ", round(res_pca$eig[2,2]), "% variance")) +
+  labs(title = "PCA FactoMineR") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold"))
+if(SAVE_PLOT_pca_factominer){
+  dev.off()
+}
+
+acp1 <- prcomp(t(relative_counts), scale = T, center = T)
+my_df <- cbind(sample_info, acp1$x)
+percent_Var <- (acp1$sdev^2) / sum(acp1$sdev^2)
+
+if(SAVE_PLOT_pca_prcomp){
+  pdf(file = "plots/pca_prcomp.pdf", width = 15, height = 12, title = "PCA prcomp")
+}
+ggplot(data = my_df, aes(x = PC1, y = PC2, color = substrate.type, shape = methanizer_state)) +
+  geom_point(alpha = 3) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold"))
+if(SAVE_PLOT_pca_prcomp){
+  dev.off()
+}
+
+umap_count <- umap(acp1$x)
+df <- data.frame(x = umap_count$layout[,1],
+                 y = umap_count$layout[,2],
+                 Type = sample_info$substrate.type,
+                 State = sample_info$methanizer_state)             
+if(SAVE_PLOT_umap){
+  pdf(file = "plots/umap.pdf", width = 15, height = 12, title = "UMAP")
+}
+ggplot(df, aes(x, y, color = Type, shape = State)) +
+  geom_point(size = 1.5) +
+  labs("UMAP") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) +
+  labs(x = "UMAP1", y = "UMAP2")
+if(SAVE_PLOT_umap){
+  dev.off()
+}
+```
+
+### Experiment by experiment
+
+```{r eval = FALSE}
+acp_exp <- prcomp(t(relative_counts), scale. = T, center = T)
+my_df <- cbind(sample_info, acp_exp$x)
+percent_Var <- (acp_exp$sdev^2) / sum(acp_exp$sdev^2)
+
+# rel_counts1 <- relative_counts[,23:60]
+# acp_exp1 <- prcomp(t(rel_counts1), scale. = T, center = T)
+# my_df1 <- cbind(sample_info[23:60,], acp_exp1$x)
+# percent_Var <- (acp_exp1$sdev^2) / sum(acp_exp1$sdev^2)
+# 
+# rel_counts2 <- relative_counts[,8:22]
+# rel_counts2 <- rel_counts2[which(apply(rel_counts2, 2, var) != 0),]
+# sample_2 <- sample_info[8:22,]
+# acp_exp2 <- prcomp(t(rel_counts2), scale. = T, center = T)
+# my_df2 <- cbind(sample_2, acp_exp2$x)
+# percent_Var <- (acp_exp2$sdev^2) / sum(acp_exp2$sdev^2)
+# 
+# rel_counts3 <- relative_counts[,1:7]
+# rel_counts3 <- rel_counts3[rowSums(relative_counts[])>0,]
+# acp_exp3 <- prcomp(t(rel_counts3), scale = T, center = T)
+# my_df3 <- cbind(sample_info[1:7,], acp_exp3$x)
+# percent_Var <- (acp_exp3$sdev^2) / sum(acp_exp3$sdev^2)
+
+if(SAVE_PLOT_pca_experiment){
+  pdf(file = "plots/pca/pca_experiment_by_experiment.pdf", width = 15, height = 12, title = "PCA experiment by experiment")
+}
+ggplot(data = my_df[23:60,], aes(x = PC1, y = PC2, label = rownames(my_df[23:60,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA experiment I (samples I to VI)") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[9:22,], aes(x = PC1, y = PC2, label = rownames(my_df[9:22,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA experiment II (samples VII to IX)") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[1:8,], aes(x = PC1, y = PC2, label = rownames(my_df[1:8,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA experiment III (samples X)") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+if(SAVE_PLOT_pca_experiment){
+  dev.off()
+}
+
+```
+
+### Sample by sample
+
+```{r eval = FALSE}
+
+if(SAVE_PLOT_pca_sample){
+  pdf(file = "plots/pca/pca_sample_by_sample.pdf", width = 15, height = 12, title = "PCA sample by sample")
+}
+ggplot(data = my_df[55:60,], aes(x = PC1, y = PC2, label = rownames(my_df[55:60,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample I") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[48:54,], aes(x = PC1, y = PC2, label = rownames(my_df[48:54,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample II") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[43:54,], aes(x = PC1, y = PC2, label = rownames(my_df[43:54,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample II and III") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[43:47,], aes(x = PC1, y = PC2, label = rownames(my_df[43:47,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample III") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[35:42,], aes(x = PC1, y = PC2, label = rownames(my_df[35:42,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample IV") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[23:34,], aes(x = PC1, y = PC2, label = rownames(my_df[23:34,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample V and VI") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[19:22,], aes(x = PC1, y = PC2, label = rownames(my_df[19:22,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample VII") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[13:18,], aes(x = PC1, y = PC2, label = rownames(my_df[13:18,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample VIII") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[8:12,], aes(x = PC1, y = PC2, label = rownames(my_df[8:12,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample IX") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+ggplot(data = my_df[1:7,], aes(x = PC1, y = PC2, label = rownames(my_df[1:7,]))) +
+  xlab(paste0("PC1: ", round(percent_Var[1] * 100), "% variance")) +
+  ylab(paste0("PC2: ", round(percent_Var[2] * 100), "% variance")) +
+  labs(title = "PCA sample X") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold")) + 
+  geom_text(check_overlap = TRUE)
+
+if(SAVE_PLOT_pca_sample){
+  dev.off()
+}
+```
+
+## Heatmaps
+```{r eval = FALSE}
+heat_color <- colorRampPalette(brewer.pal(8, "RdBu"))(25)
+count_cor <- cor(relative_counts)
+
+if(SAVE_PLOT_correlation){
+  pdf(file = "plots/heatmap_correlation.pdf", width = 15, height = 12, title = "heatmap de corrélation")
+}
+pheatmap(count_cor, 
+         color = heat_color,
+         border_color = NA,
+         fountsize = 12,
+         fontsize_row = 8.5,
+         fontsize_col = 9,
+         height = 30,
+         main = "Heatmap de corrélation")
+if(SAVE_PLOT_correlation){
+  dev.off()
+}
+
+state_counts <- as.data.frame(t(relative_counts))
+state_counts$state <- sample_info$methanizer_state[1:60]
+state_counts$substrate_type <- sample_info$substrate.type[1:60]
+state_counts$experiment_nb <- sample_info$experiment.number[1:60]
+
+map_state_per <- heatmaply(percentize(state_counts), xlab = "Phylums", ylab = "Samples",
+                       main = "Heatmap of the normalized relative abundance",
+                       margins = c(60,100,40,20),
+                       dendrogram = "row", k_row = 10) 
+saveWidget(map_state_per, "plots/methanizer_state_percentize.html")
+
+map_state_norm <- heatmaply(normalize(state_counts), xlab = "Phylums", ylab = "Samples",
+                       main = "Heatmap of the normalized relative abundance",
+                       margins = c(60,100,40,20),
+                       dendrogram = "row", k_row = 10) 
+saveWidget(map_state_norm, "plots/methanizer_state_normalize.html")
+```
+
+# Methaniser state comparison
+
+```{r eval = FALSE}
+state_counts <- as.data.frame(t(relative_counts))
+state_counts$state <- sample_info$methanizer_state[1:60]
+state_counts$substrate_type <- sample_info$substrate.type[1:60]
+state_counts$experiment_nb <- sample_info$experiment.number[1:60]
+
+if(SAVE_PLOT_comparison){
+  pdf(file = "plots/comparison_Firmicutes.pdf", width = 15, height = 12, title = "Comparison state Firmicutes")
+}
+state_counts %>%
+  filter(state %in% c("good", "bad")) %>%
+  ggplot(aes(x = state, y = state_counts$Firmicutes, fill = state, colour = state)) +
+  geom_boxplot(alpha = 0.25, outlier.alpha = 0) +
+  geom_jitter(fill = "black") +
+  stat_summary(fun.y = mean, colour = "white", geom = "point", shape = 18, size = 5) +
+  ggtitle("State comparison with relative counts for Firmicutes")
+if(SAVE_PLOT_comparison){
+  dev.off()
+}
+
+good <- state_counts %>%
+  filter(state == "good")
+bad <- state_counts %>%
+  filter(state == "bad")
+shapiro.test(good$Firmicutes)
+shapiro.test(bad$Firmicutes)
+qqnorm(good$Firmicutes)
+qqline(good$Firmicutes)
+qqnorm(bad$Firmicutes)
+qqline(bad$Firmicutes)
+# La p-value est largement inférieure à 0.05, l'hypothèse de normalité n'est donc pas acceptée, les données ne suivent donc pas la loi Normale.
+
+sc <- state_counts %>%
+  filter(state %in% c("good", "bad"))
+
+wilcox.test(sc$Firmicutes~sc$state)
+# Les données ne suivant pas la loi Normale, c'est le test de Wilcoxon qui est appliqué. La p-value est supérieure à 0.05, l'hypothèse de similarité des moyennes est validée.
+
+
+tab = table(c(state_counts$state, state_counts$type))
+chisq.test(tab)
+# La p-value est inférieure à 0.05, on peut donc dire que l'état du méthaniseur et le type de substrat sont dépendants l'un de l'autre.
+```
+
+# Methaniser state plots
+
+```{r eval = FALSE}
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_X.pdf", width = 15, height = 12, title = "Counts by methanizer state for X_x samples")
+}
+state_counts[1:7,] %>%
+  tibble::rownames_to_column("samples") %>%
+  gather("OTU", "counts", 1:36, -samples) %>%
+  mutate("condition" = str_replace(samples, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = samples)) +
+  geom_point() +
+  ggtitle("Relative counts by methanizer state for X_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_IX.pdf", width = 15, height = 12, title = "Counts by methanizer state for IX_x samples")
+}
+state_counts[8:12,] %>%
+  tibble::rownames_to_column("sample") %>%
+  gather("OTU", "counts", 1:36, -sample) %>%
+  mutate("condition" = str_replace(sample, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = sample)) +
+  geom_point() +
+  ggtitle("Counts by methanizer state for IX_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_VIII.pdf", width = 15, height = 12, title = "Counts by methanizer state for VIII_x samples")
+}
+state_counts[13:18,] %>%
+  tibble::rownames_to_column("sample") %>%
+  gather("OTU", "counts", 1:36, -sample) %>%
+  mutate("condition" = str_replace(sample, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = sample)) +
+  geom_point() +
+  ggtitle("Counts by methanizer state for VIII_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_VII.pdf", width = 15, height = 12, title = "Counts by methanizer state for VII_x samples")
+}
+state_counts[19:22,] %>%
+  tibble::rownames_to_column("sample") %>%
+  gather("OTU", "counts", 1:36, -sample) %>%
+  mutate("condition" = str_replace(sample, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = sample)) +
+  geom_point() +
+  ggtitle("Counts by methanizer state for VII_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_VI.pdf", width = 15, height = 12, title = "Counts by methanizer state for VI_x samples")
+}
+state_counts[23:33,] %>%
+  tibble::rownames_to_column("sample") %>%
+  gather("OTU", "counts", 1:36, -sample) %>%
+  mutate("condition" = str_replace(sample, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = sample)) +
+  geom_point() +
+  ggtitle("Counts by methanizer state for VI_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_V.pdf", width = 15, height = 12, title = "Counts by methanizer state for V_x samples")
+}
+state_counts[34,] %>%
+  tibble::rownames_to_column("sample") %>%
+  gather("OTU", "counts", 1:36, -sample) %>%
+  mutate("condition" = str_replace(sample, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = sample)) +
+  geom_point() +
+  ggtitle("Counts by methanizer state for V_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_IV.pdf", width = 15, height = 12, title = "Counts by methanizer state for IV_x samples")
+}
+state_counts[35:42,] %>%
+  tibble::rownames_to_column("sample") %>%
+  gather("OTU", "counts", 1:36, -sample) %>%
+  mutate("condition" = str_replace(sample, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = sample)) +
+  geom_point() +
+  ggtitle("Counts by methanizer state for IV_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_III.pdf", width = 15, height = 12, title = "Counts by methanizer state for III_x samples")
+}
+state_counts[43:47,] %>%
+  tibble::rownames_to_column("sample") %>%
+  gather("OTU", "counts", 1:36, -sample) %>%
+  mutate("condition" = str_replace(sample, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = sample)) +
+  geom_point() +
+  ggtitle("Counts by methanizer state for III_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_II.pdf", width = 15, height = 12, title = "Counts by methanizer state for II_x samples")
+}
+state_counts[48:54,] %>%
+  tibble::rownames_to_column("sample") %>%
+  gather("OTU", "counts", 1:36, -sample) %>%
+  mutate("condition" = str_replace(sample, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = sample)) +
+  geom_point() +
+  ggtitle("Counts by methanizer state for II_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+
+if(SAVE_PLOT_state_X){
+  pdf(file = "plots/state/state_plots_I.pdf", width = 15, height = 12, title = "Counts by methanizer state for I_x samples")
+}
+state_counts[55:61,] %>%
+  tibble::rownames_to_column("sample") %>%
+  gather("OTU", "counts", 1:36, -sample) %>%
+  mutate("condition" = str_replace(sample, "_.*", "")) %>%
+  mutate(., condition = factor(condition, levels = unique(condition))) %>%
+  ggplot(aes(state, counts, color = sample)) +
+  geom_point() +
+  ggtitle("Counts by methanizer state for I_x samples")+
+  facet_wrap(~ OTU, scales = "free")
+if(SAVE_PLOT_state_X){
+  dev.off()
+}
+```
+
+# Tests for IX-28 sample
+
+## IX-28 VS IX-21 (both in bad condition)
+
+```{r eval = FALSE}
+sample_counts <- as.data.frame(t(state_counts))
+
+shapiro.test(as.numeric(sample_counts$IX_28))
+shapiro.test(as.numeric(sample_counts$IX_21))
+qqnorm(as.numeric(sample_counts$IX_28))
+qqline(as.numeric(sample_counts$IX_28))
+```
+The p-value being lower than 0.05, the samples do not follow a Normal distribution.
+```{r eval = FALSE}
+wilcox.test(as.numeric(sample_counts$IX_28), as.numeric(sample_counts$IX_21))
+```
+As the data do not follow the Normal distribution, the Wilcoxon test is applied. The p-value is higher than 0.05, the hypothesis of similarity of means is validated.
+
+## IX-28 VS IX-14 (bad VS good)
+
+```{r eval = FALSE}
+shapiro.test(as.numeric(sample_counts$IX_14))
+
+```
+The p-value being lower than 0.05, the samples do not follow a Normal distribution.
+```{r eval = FALSE}
+
+wilcox.test(as.numeric(sample_counts$IX_28), as.numeric(sample_counts$IX_14))
+# La p-value est est supérieure à 0.05, l'hypothèse de similarité des moyennes est validée.
+```
+As the data do not follow the Normal distribution, the Wilcoxon test is applied. The p-value is higher than 0.05, the hypothesis of similarity of means is validated.
+
+# mixOmics tests
+
+## Data initialisation 
+
+```{r eval = FALSE}
+phyloseq_obj@sam_data <- phyloseq_obj@sam_data[1:60]
+phyloseq_obj@sam_data$substrate_type <- sample_info$substrate.type[1:60]
+phyloseq_obj@sam_data$methanizer_state <- sample_info$methanizer_state[1:60]
+phyloseq_obj@sam_data$experiment_number <- sample_info$experiment.number[1:60]
+write_phyloseq(phyloseq_obj, path = "phyloseq_obj", rdata = TRUE)
+
+taxo <- tax_table(phyloseq_obj)
+meta.data <- phyloseq_obj@sam_data[-61]
+data.raw <- t(otu_table(phyloseq_obj))
+data.raw <- data.raw[-61]
+
+meta.data$substrate_type <- sample_info$substrate.type
+```
+
+## STEP 1: OFFSET
+```{r eval=FALSE}
+data.offset <- data.raw + 1
+sum(which(data.offset == 0))
+dim(data.offset)
+```
+
+## STEP 2 : PRE-FILTER
+```{r eval = FALSE}
+
+low.count.removal <- function(
+    data, # OTU count df of size n (sample) x p (OTU)
+    percent=0.01 # cutoff chosen
+) 
+{
+  keep.otu = which(colSums(data)*100/(sum(colSums(data))) > percent)
+  data.filter = data[,keep.otu]
+  return(list(data.filter = data.filter, keep.otu = keep.otu))
+}
+result.filter <- low.count.removal(data.offset, percent = 0.01)
+data.filter <- result.filter$data.filter
+length(result.filter$keep.otu)
+
+lib.size <- apply(data.filter, 1, sum)
+maximum.lib.size <- 15000
+#data.filter <- data.filter[-which(lib.size > maximum.lib.size),]
+```
+
+## STEP 3 : PLOTING
+```{r eval=FALSE}
+#ggrare(phyloseq_obj)
+pca.result <- pca(data.filter, ncomp = 2, logratio = 'CLR')
+
+basic.plsda = plsda(data.filter, meta.data$experiment_number, logratio = 'CLR', ncomp = 9)
+
+if(SAVE_PLOT_mixomics){
+  pdf(file = "plots/mixomics.pdf", width = 15, height = 12, title = "plot mixomics")
+}
+plotIndiv(pca.result, group = meta.data$experiment_number, title = "PCA phylums", legend = TRUE)
+
+plotIndiv(basic.plsda, comp= c(1,2), ind.names = F, ellipse = T, legend = T, legend.title = "Experiment number", title = "Clustering by experiment number")
+
+cim(basic.plsda, comp = c(1,2), 
+    row.sideColors = color.mixo(as.numeric(meta.data$experiment_number)),
+    title = "Clustered Image Map of our data")
+
+plotVar(basic.plsda, comp = c(1,2), 
+        cutoff = 0.7, rad.in = 0.7, 
+        title = "Correlation circle plot")
+
+
+network(basic.plsda, cutoff = 0.5, color.node = c("lightpink", "purple"))
+
+plotLoadings(basic.plsda, comp = 1, 
+             method = 'mean', contrib = 'max',  
+             size.name = 0.8, legend = FALSE,  
+             ndisplay = 20,
+             title = "(a) Loadings of first component")
+
+plotLoadings(basic.plsda, comp = 2, 
+             method = 'mean', contrib = 'max',   
+             size.name = 0.7,
+             ndisplay = 20,
+             title = "(b) Loadings of second comp.")
+if(SAVE_PLOT_mixomics){
+  dev.off()
+}
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
